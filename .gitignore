@@ -1,0 +1,17 @@
+.DS_Store
+
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv
+
+.ruff_cache
+.pytest_cache
+.coverage
+coverage.xml
+
+.claude/settings.local.json
+!.beads

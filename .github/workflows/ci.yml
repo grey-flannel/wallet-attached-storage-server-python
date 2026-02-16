@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Ruff
+        run: uv run ruff check
+
+      - name: Flake8
+        run: uv run flake8 src tests
+
+      - name: Bandit (src)
+        run: uv run bandit -r src
+
+      - name: Bandit (tests)
+        run: uv run bandit -r tests -s B101
+
+      - name: Safety
+        run: uv run safety scan
+        continue-on-error: true
+        env:
+          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
+
+      - name: Tests
+        run: uv run -m pytest -vv --cov=src --cov-report=term -m "not live"
+
+  publish:
+    needs: [test]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build
+        run: uv build
+
+      - name: Publish
+        run: uv publish
