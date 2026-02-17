@@ -152,7 +152,7 @@ FAKE_SA_INFO = json.dumps({
     "client_email": "test@test.iam.gserviceaccount.com",
     "client_id": "1234567890",
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
+    "token_uri": "https://oauth2.googleapis.com/token",  # nosec B105
 })
 
 

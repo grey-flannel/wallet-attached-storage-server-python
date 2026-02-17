@@ -13,7 +13,7 @@ from was_server._storage_onedrive import OneDriveStorage  # noqa: E402
 
 pytestmark = pytest.mark.onedrive
 
-FAKE_TOKEN = "fake-access-token"  # noqa: S105
+FAKE_TOKEN = "fake-access-token"  # noqa: S105  # nosec B105
 DRIVE_ID = "test-drive-id"
 ROOT = "was_data"
 SPACE_UUID = "abc-123"
@@ -55,7 +55,7 @@ def storage() -> OneDriveStorage:
         mock_msal.ConfidentialClientApplication.return_value = mock_app
         s = OneDriveStorage(
             client_id="cid",
-            client_secret="csecret",  # noqa: S106
+            client_secret="csecret",  # noqa: S106  # nosec B106
             tenant_id="tid",
             drive_id=DRIVE_ID,
             root_folder=ROOT,
@@ -86,7 +86,7 @@ class TestDrivePath:
             mock_app = MagicMock()
             mock_app.acquire_token_for_client.return_value = {"access_token": FAKE_TOKEN}
             mock_msal.ConfidentialClientApplication.return_value = mock_app
-            s = OneDriveStorage(client_id="cid", client_secret="csecret", tenant_id="tid")  # noqa: S106
+            s = OneDriveStorage(client_id="cid", client_secret="csecret", tenant_id="tid")  # noqa: S106  # nosec B106
         assert s._drive_path == "https://graph.microsoft.com/v1.0/me/drive"
 
 

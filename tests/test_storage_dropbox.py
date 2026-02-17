@@ -123,7 +123,7 @@ def fake_dbx() -> _FakeDropboxClient:
 @pytest.fixture()
 def store(fake_dbx: _FakeDropboxClient) -> Generator[DropboxStorage]:
     with patch("was_server._storage_dropbox.dropbox.Dropbox", return_value=fake_dbx):
-        yield DropboxStorage(access_token="fake-token", root_folder="was_data")
+        yield DropboxStorage(access_token="fake-token", root_folder="was_data")  # nosec B106
 
 
 # ---------------------------------------------------------------------------
@@ -134,13 +134,15 @@ def store(fake_dbx: _FakeDropboxClient) -> Generator[DropboxStorage]:
 class TestAuth:
     def test_access_token(self, fake_dbx: _FakeDropboxClient) -> None:
         with patch("was_server._storage_dropbox.dropbox.Dropbox", return_value=fake_dbx) as mock_cls:
-            DropboxStorage(access_token="tok123")
-            mock_cls.assert_called_once_with(oauth2_access_token="tok123")
+            DropboxStorage(access_token="tok123")  # nosec B106
+            mock_cls.assert_called_once_with(oauth2_access_token="tok123")  # nosec B106
 
     def test_refresh_token(self, fake_dbx: _FakeDropboxClient) -> None:
         with patch("was_server._storage_dropbox.dropbox.Dropbox", return_value=fake_dbx) as mock_cls:
-            DropboxStorage(refresh_token="ref123", app_key="key", app_secret="secret")
-            mock_cls.assert_called_once_with(oauth2_refresh_token="ref123", app_key="key", app_secret="secret")
+            DropboxStorage(refresh_token="ref123", app_key="key", app_secret="secret")  # nosec B106
+            mock_cls.assert_called_once_with(  # nosec B106
+                oauth2_refresh_token="ref123", app_key="key", app_secret="secret",
+            )
 
     def test_no_credentials_raises(self) -> None:
         with pytest.raises(ValueError, match="Either access_token or refresh_token"):

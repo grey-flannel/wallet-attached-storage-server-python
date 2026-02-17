@@ -85,11 +85,11 @@ class TestOneDriveBackend:
 
     def test_missing_tenant_id_raises(self) -> None:
         with pytest.raises(ValueError, match="WAS_STORAGE_TENANT_ID"):
-            _create("onedrive", {"client_id": "x", "client_secret": "y"})
+            _create("onedrive", {"client_id": "x", "client_secret": "y"})  # nosec B105
 
     def test_creates_instance(self) -> None:
         with patch("was_server._storage_onedrive.msal"):
-            store = _create("onedrive", {
+            store = _create("onedrive", {  # nosec B105
                 "client_id": "x", "client_secret": "y", "tenant_id": "t",
             })
         from was_server._storage_onedrive import OneDriveStorage
@@ -101,7 +101,7 @@ class TestDropboxBackend:
     def test_creates_instance(self) -> None:
         with patch("was_server._storage_dropbox.dropbox") as mock_dbx_mod:
             mock_dbx_mod.Dropbox.return_value = MagicMock()
-            store = _create("dropbox", {"access_token": "fake-token"})
+            store = _create("dropbox", {"access_token": "fake-token"})  # nosec B105
         from was_server._storage_dropbox import DropboxStorage
 
         assert isinstance(store, DropboxStorage)
