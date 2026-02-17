@@ -45,9 +45,30 @@ The server exposes the full WAS API at the root path. Clients authenticate with 
 
 Each space has a `controller` field set to a `did:key` DID. All write operations and space reads require an HTTP Signature whose signing key matches the space controller. Resource reads are unsigned (public).
 
-### Storage Backend
+### Storage Backends
 
-The server ships with an in-memory storage backend. The storage layer is defined as a Python protocol, so you can swap in a file, database, or S3 backend by implementing `StorageBackend`.
+The server ships with pluggable storage backends selected via the `WAS_STORAGE_BACKEND` environment variable (default: `memory`).
+
+| Backend                                          | Install extra | Description                        |
+|--------------------------------------------------|---------------|------------------------------------|
+| [Memory](docs/backends/memory.md)                | *(none)*      | In-memory (default, non-persistent)|
+| [Filesystem](docs/backends/filesystem.md)        | *(none)*      | Local filesystem                   |
+| [PostgreSQL](docs/backends/postgresql.md)        | `postgresql`  | PostgreSQL via psycopg3            |
+| [Amazon S3](docs/backends/s3.md)                 | `s3`          | Amazon S3 bucket                   |
+| [Dropbox](docs/backends/dropbox.md)              | `dropbox`     | Dropbox via SDK v2                 |
+| [Microsoft OneDrive](docs/backends/onedrive.md)  | `onedrive`    | OneDrive via Microsoft Graph       |
+| [Google Drive](docs/backends/gdrive.md)          | `gdrive`      | Google Drive via service account   |
+
+```bash
+# Example: run with the filesystem backend
+export WAS_STORAGE_BACKEND=filesystem
+uvicorn was_server:app --port 8080
+
+# Example: install with PostgreSQL support
+pip install "wallet-attached-storage-server[postgresql]"
+```
+
+See each backend's documentation for configuration details.
 
 ## Development
 

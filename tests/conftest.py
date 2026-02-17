@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from was_server._app import app, storage
 from was_server._http_signature import _DEFAULT_INCLUDE_HEADERS, build_signature_string
+from was_server._storage import MemoryStorage
 
 # Multicodec prefix for Ed25519 public keys (0xed 0x01)
 _MULTICODEC_ED25519_PUB = b"\xed\x01"
@@ -83,5 +84,6 @@ def signer() -> Ed25519TestSigner:
 
 @pytest.fixture()
 def test_client() -> TestClient:
+    assert isinstance(storage, MemoryStorage), "App tests expect WAS_STORAGE_BACKEND=memory (the default)"
     storage.clear()
     return TestClient(app)

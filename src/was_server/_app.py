@@ -8,11 +8,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from was_server._http_signature import ParsedSignature, verify_signature
-from was_server._storage import MemoryStorage
+from was_server._storage_factory import create_storage
 from was_server._urn_uuid import make_urn_uuid
 
 app = FastAPI()
-storage = MemoryStorage()
+storage = create_storage()
 
 
 def _problem_response(status: int, title: str, detail: str, pointer: str = "/authorization") -> JSONResponse:

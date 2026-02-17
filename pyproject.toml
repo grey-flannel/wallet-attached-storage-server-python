@@ -15,6 +15,14 @@ dependencies = [
     "uvicorn>=0.34",
 ]
 
+[project.optional-dependencies]
+postgresql = ["psycopg[binary]>=3.1", "psycopg-pool>=3.1"]
+s3 = ["boto3>=1.26"]
+onedrive = ["msal>=1.20", "httpx>=0.27"]
+dropbox = ["dropbox>=12.0"]
+gdrive = ["google-api-python-client>=2.100", "google-auth>=2.20"]
+all-backends = ["wallet-attached-storage-server[postgresql,s3,onedrive,dropbox,gdrive]"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -29,6 +37,7 @@ dev = [
     "pytest-cov>=6.2.1",
     "ruff>=0.12.0",
     "safety>=3.2.9",
+    "moto[s3]>=5.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -36,7 +45,14 @@ packages = ["src/was_server"]
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
-markers = ["live: tests requiring a WAS server on localhost:8080"]
+markers = [
+    "live: tests requiring a WAS server on localhost:8080",
+    "postgresql: tests requiring a PostgreSQL database",
+    "s3: tests for S3 backend (uses moto mock)",
+    "onedrive: tests for OneDrive backend",
+    "dropbox: tests for Dropbox backend",
+    "gdrive: tests for Google Drive backend",
+]
 
 [tool.ruff]
 line-length = 120
@@ -46,4 +62,4 @@ target-version = "py311"
 select = ["E", "F", "N", "S"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S106"]
