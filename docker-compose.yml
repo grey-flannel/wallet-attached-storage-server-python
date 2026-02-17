@@ -1,0 +1,36 @@
+services:
+  was-server:
+    build:
+      context: .
+      args:
+        EXTRAS: postgresql
+    ports:
+      - "8080:8080"
+    environment:
+      WAS_STORAGE_BACKEND: postgresql
+      WAS_STORAGE_DSN: postgresql://was:was@postgres:5432/was
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: was
+      POSTGRES_PASSWORD: was
+      POSTGRES_DB: was
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U was"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

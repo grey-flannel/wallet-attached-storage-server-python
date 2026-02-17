@@ -70,6 +70,50 @@ pip install "wallet-attached-storage-server[postgresql]"
 
 See each backend's documentation for configuration details.
 
+## Docker
+
+Run the server as a container without managing a Python environment. Configure a storage backend entirely through environment variables.
+
+### Build and Run
+
+```bash
+# Default (in-memory backend)
+docker build -t was-server .
+docker run -p 8080:8080 was-server
+
+# With PostgreSQL backend support
+docker build --build-arg EXTRAS=postgresql -t was-server .
+
+# With all backend dependencies
+docker build --build-arg EXTRAS=all-backends -t was-server .
+```
+
+Configure the backend with `-e` flags:
+
+```bash
+docker run -p 8080:8080 \
+  -e WAS_STORAGE_BACKEND=filesystem \
+  -e WAS_STORAGE_ROOT_DIR=/data \
+  -v was-data:/data \
+  was-server
+```
+
+The `EXTRAS` build argument accepts any install extra from the table above: `postgresql`, `s3`, `dropbox`, `onedrive`, `gdrive`, or `all-backends`.
+
+### Docker Compose
+
+A `docker-compose.yml` is included that runs the server with a PostgreSQL backend:
+
+```bash
+docker compose up
+```
+
+This starts the WAS server on port 8080 backed by a PostgreSQL 17 instance with persistent storage. The default compose credentials are for local development only — override them via environment variables or a `.env` file for any real deployment.
+
+### Health Check
+
+The server exposes `GET /health` (no auth required) returning `{"status": "ok"}`. The compose file uses this for container health checks, and it works with any orchestrator (ECS, Kubernetes, etc.).
+
 ## Development
 
 ```bash

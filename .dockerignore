@@ -1,0 +1,15 @@
+.venv
+.git
+.github
+.ruff_cache
+.pytest_cache
+.coverage
+.beads
+.claude
+__pycache__
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+tests/

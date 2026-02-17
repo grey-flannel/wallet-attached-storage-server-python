@@ -15,6 +15,12 @@ app = FastAPI()
 storage = create_storage()
 
 
+@app.get("/health")
+async def health() -> JSONResponse:
+    """Health check endpoint for container orchestrators."""
+    return JSONResponse(content={"status": "ok"})
+
+
 def _problem_response(status: int, title: str, detail: str, pointer: str = "/authorization") -> JSONResponse:
     """Return an ``application/problem+json`` error response."""
     return JSONResponse(
