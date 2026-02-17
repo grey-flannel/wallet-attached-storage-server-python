@@ -38,11 +38,12 @@ def create_storage() -> StorageBackend:
         return S3Storage(bucket=bucket, prefix=config.get("prefix", ""))
 
     if name == "onedrive":
-        from was_server._storage_onedrive import OneDriveStorage
-
         for required in ("client_id", "client_secret", "tenant_id"):
             if required not in config:
                 raise ValueError(f"WAS_STORAGE_{required.upper()} is required for the onedrive backend")
+
+        from was_server._storage_onedrive import OneDriveStorage
+
         return OneDriveStorage(
             client_id=config["client_id"],
             client_secret=config["client_secret"],
@@ -63,11 +64,11 @@ def create_storage() -> StorageBackend:
         )
 
     if name == "gdrive":
-        from was_server._storage_gdrive import GoogleDriveStorage
-
         credentials_json = config.get("credentials_json")
         if not credentials_json:
             raise ValueError("WAS_STORAGE_CREDENTIALS_JSON is required for the gdrive backend")
+
+        from was_server._storage_gdrive import GoogleDriveStorage
         return GoogleDriveStorage(
             credentials_json=credentials_json,
             root_folder=config.get("root_folder", "was_data"),

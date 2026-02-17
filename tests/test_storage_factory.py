@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 import types
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from was_server._storage import MemoryStorage
+
+_has_msal = importlib.util.find_spec("msal") is not None
+_has_dropbox = importlib.util.find_spec("dropbox") is not None
+_has_google = importlib.util.find_spec("googleapiclient") is not None
 
 # Ensure psycopg_pool is importable even when psycopg is not installed.
 if "psycopg_pool" not in sys.modules:
@@ -87,6 +92,7 @@ class TestOneDriveBackend:
         with pytest.raises(ValueError, match="WAS_STORAGE_TENANT_ID"):
             _create("onedrive", {"client_id": "x", "client_secret": "y"})  # nosec B105
 
+    @pytest.mark.skipif(not _has_msal, reason="msal not installed")
     def test_creates_instance(self) -> None:
         with patch("was_server._storage_onedrive.msal"):
             store = _create("onedrive", {  # nosec B105
@@ -97,6 +103,7 @@ class TestOneDriveBackend:
         assert isinstance(store, OneDriveStorage)
 
 
+@pytest.mark.skipif(not _has_dropbox, reason="dropbox not installed")
 class TestDropboxBackend:
     def test_creates_instance(self) -> None:
         with patch("was_server._storage_dropbox.dropbox") as mock_dbx_mod:
@@ -112,6 +119,7 @@ class TestGDriveBackend:
         with pytest.raises(ValueError, match="WAS_STORAGE_CREDENTIALS_JSON"):
             _create("gdrive")
 
+    @pytest.mark.skipif(not _has_google, reason="google-api-python-client not installed")
     def test_creates_instance(self) -> None:
         with (
             patch("was_server._storage_gdrive.Credentials.from_service_account_info") as mock_creds,
