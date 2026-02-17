@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-import json
-import urllib.parse
-
 import dropbox
 from dropbox.exceptions import ApiError
 from dropbox.files import FolderMetadata, WriteMode
 
-from was_server._storage import StoredResource, StoredSpace
+from was_server._storage import (
+    StoredResource,
+    StoredSpace,
+    encode_resource_path,
+    parse_resource_meta,
+    parse_space_meta,
+    serialize_resource_meta,
+    serialize_space_meta,
+)
 
 
 class DropboxStorage:
@@ -57,15 +62,11 @@ class DropboxStorage:
     def _meta_path(self, space_uuid: str) -> str:
         return f"{self._space_dir(space_uuid)}/_meta.json"
 
-    @staticmethod
-    def _encode_path(path: str) -> str:
-        return urllib.parse.quote(path, safe="")
-
     def _resource_data_path(self, space_uuid: str, path: str) -> str:
-        return f"{self._space_dir(space_uuid)}/resources/{self._encode_path(path)}.data"
+        return f"{self._space_dir(space_uuid)}/resources/{encode_resource_path(path)}.data"
 
     def _resource_meta_path(self, space_uuid: str, path: str) -> str:
-        return f"{self._space_dir(space_uuid)}/resources/{self._encode_path(path)}.meta"
+        return f"{self._space_dir(space_uuid)}/resources/{encode_resource_path(path)}.meta"
 
     def _upload(self, path: str, data: bytes) -> None:
         """Upload bytes to a Dropbox path, overwriting if it exists."""
@@ -109,12 +110,10 @@ class DropboxStorage:
         data = self._download(self._meta_path(space_uuid))
         if data is None:
             return None
-        meta = json.loads(data)
-        return StoredSpace(id=meta["id"], controller=meta["controller"])
+        return parse_space_meta(data)
 
     def put_space(self, space_uuid: str, space_id: str, controller: str) -> None:
-        meta = {"id": space_id, "controller": controller}
-        self._upload(self._meta_path(space_uuid), json.dumps(meta).encode())
+        self._upload(self._meta_path(space_uuid), serialize_space_meta(space_id, controller))
 
     def delete_space(self, space_uuid: str) -> bool:
         return self._delete(self._space_dir(space_uuid))
@@ -141,9 +140,9 @@ class DropboxStorage:
             data = self._download(self._meta_path(space_uuid))
             if data is None:
                 continue
-            meta = json.loads(data)
-            if meta.get("controller") == controller:
-                spaces.append(StoredSpace(id=meta["id"], controller=meta["controller"]))
+            space = parse_space_meta(data)
+            if space.controller == controller:
+                spaces.append(space)
         return spaces
 
     def get_resource(self, space_uuid: str, path: str) -> StoredResource | None:
@@ -153,15 +152,13 @@ class DropboxStorage:
         meta_data = self._download(self._resource_meta_path(space_uuid, path))
         if meta_data is None:
             return None
-        meta = json.loads(meta_data)
-        return StoredResource(content=content, content_type=meta["content_type"])
+        return StoredResource(content=content, content_type=parse_resource_meta(meta_data))
 
     def put_resource(self, space_uuid: str, path: str, content: bytes, content_type: str) -> None:
         if not self._exists(self._meta_path(space_uuid)):
             raise KeyError(f"Space {space_uuid!r} not found")
         self._upload(self._resource_data_path(space_uuid, path), content)
-        meta = json.dumps({"content_type": content_type}).encode()
-        self._upload(self._resource_meta_path(space_uuid, path), meta)
+        self._upload(self._resource_meta_path(space_uuid, path), serialize_resource_meta(content_type))
 
     def delete_resource(self, space_uuid: str, path: str) -> bool:
         if not self._delete(self._resource_data_path(space_uuid, path)):

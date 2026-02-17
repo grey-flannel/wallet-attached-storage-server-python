@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import json
-import urllib.parse
-
 import boto3
 from botocore.exceptions import ClientError
 
-from was_server._storage import StoredResource, StoredSpace
+from was_server._storage import (
+    StoredResource,
+    StoredSpace,
+    encode_resource_path,
+    parse_space_meta,
+    serialize_space_meta,
+)
 
 
 class S3Storage:
@@ -29,8 +32,7 @@ class S3Storage:
         return f"{self._prefix}spaces/{space_uuid}/_meta.json"
 
     def _resource_key(self, space_uuid: str, path: str) -> str:
-        encoded = urllib.parse.quote(path, safe="")
-        return f"{self._prefix}spaces/{space_uuid}/resources/{encoded}"
+        return f"{self._prefix}spaces/{space_uuid}/resources/{encode_resource_path(path)}"
 
     def _space_prefix(self, space_uuid: str) -> str:
         return f"{self._prefix}spaces/{space_uuid}/"
@@ -42,15 +44,13 @@ class S3Storage:
             if e.response["Error"]["Code"] == "NoSuchKey":
                 return None
             raise
-        meta = json.loads(resp["Body"].read())
-        return StoredSpace(id=meta["id"], controller=meta["controller"])
+        return parse_space_meta(resp["Body"].read())
 
     def put_space(self, space_uuid: str, space_id: str, controller: str) -> None:
-        meta = json.dumps({"id": space_id, "controller": controller}).encode()
         self._client.put_object(
             Bucket=self._bucket,
             Key=self._meta_key(space_uuid),
-            Body=meta,
+            Body=serialize_space_meta(space_id, controller),
             ContentType="application/json",
         )
 
@@ -77,14 +77,18 @@ class S3Storage:
         prefix = f"{self._prefix}spaces/"
         result: list[StoredSpace] = []
         paginator = self._client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
-            for obj in page.get("Contents", []):
-                if not obj["Key"].endswith("/_meta.json"):
-                    continue
-                resp = self._client.get_object(Bucket=self._bucket, Key=obj["Key"])
-                meta = json.loads(resp["Body"].read())
-                if meta.get("controller") == controller:
-                    result.append(StoredSpace(id=meta["id"], controller=meta["controller"]))
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix, Delimiter="/"):
+            for cp in page.get("CommonPrefixes", []):
+                space_uuid = cp["Prefix"][len(prefix):].rstrip("/")
+                try:
+                    resp = self._client.get_object(Bucket=self._bucket, Key=self._meta_key(space_uuid))
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "NoSuchKey":
+                        continue
+                    raise
+                space = parse_space_meta(resp["Body"].read())
+                if space.controller == controller:
+                    result.append(space)
         return result
 
     def get_resource(self, space_uuid: str, path: str) -> StoredResource | None:

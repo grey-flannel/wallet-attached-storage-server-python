@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-import json
-import urllib.parse
-
 import httpx
 import msal
 
-from was_server._storage import StoredResource, StoredSpace
+from was_server._storage import (
+    StoredResource,
+    StoredSpace,
+    encode_resource_path,
+    parse_resource_meta,
+    parse_space_meta,
+    serialize_resource_meta,
+    serialize_space_meta,
+)
 
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _SCOPES = ["https://graph.microsoft.com/.default"]
@@ -43,6 +48,10 @@ class OneDriveStorage:
             client_credential=client_secret,
         )
         self._client = httpx.Client(timeout=30.0)
+
+    def close(self) -> None:
+        """Close the underlying HTTP client."""
+        self._client.close()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -95,15 +104,11 @@ class OneDriveStorage:
     def _meta_path(self, space_uuid: str) -> str:
         return f"{self._space_path(space_uuid)}/_meta.json"
 
-    @staticmethod
-    def _encode_path(path: str) -> str:
-        return urllib.parse.quote(path, safe="")
-
     def _resource_data_path(self, space_uuid: str, path: str) -> str:
-        return f"{self._space_path(space_uuid)}/resources/{self._encode_path(path)}.data"
+        return f"{self._space_path(space_uuid)}/resources/{encode_resource_path(path)}.data"
 
     def _resource_meta_path(self, space_uuid: str, path: str) -> str:
-        return f"{self._space_path(space_uuid)}/resources/{self._encode_path(path)}.meta"
+        return f"{self._space_path(space_uuid)}/resources/{encode_resource_path(path)}.meta"
 
     # ------------------------------------------------------------------
     # StorageBackend implementation
@@ -114,12 +119,11 @@ class OneDriveStorage:
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
-        meta = resp.json()
-        return StoredSpace(id=meta["id"], controller=meta["controller"])
+        return parse_space_meta(resp.content)
 
     def put_space(self, space_uuid: str, space_id: str, controller: str) -> None:
-        meta = {"id": space_id, "controller": controller}
-        self._put_file(self._meta_path(space_uuid), json.dumps(meta).encode(), "application/json").raise_for_status()
+        meta = serialize_space_meta(space_id, controller)
+        self._put_file(self._meta_path(space_uuid), meta, "application/json").raise_for_status()
 
     def delete_space(self, space_uuid: str) -> bool:
         resp = self._delete_item(self._space_path(space_uuid))
@@ -129,24 +133,26 @@ class OneDriveStorage:
         return True
 
     def list_spaces(self, controller: str) -> list[StoredSpace]:
-        resp = self._list_children(f"{self._root_folder}/spaces")
-        if resp.status_code == 404:
-            return []
-        resp.raise_for_status()
-        children = resp.json().get("value", [])
-
+        url: str | None = f"{self._item_path(f'{self._root_folder}/spaces')}/children"
         result: list[StoredSpace] = []
-        for child in children:
-            if "folder" not in child:
-                continue
-            space_uuid = child["name"]
-            meta_resp = self._get_file(self._meta_path(space_uuid))
-            if meta_resp.status_code == 404:
-                continue
-            meta_resp.raise_for_status()
-            meta = meta_resp.json()
-            if meta.get("controller") == controller:
-                result.append(StoredSpace(id=meta["id"], controller=meta["controller"]))
+        while url:
+            resp = self._client.get(url, headers=self._headers())
+            if resp.status_code == 404:
+                return []
+            resp.raise_for_status()
+            data = resp.json()
+            for child in data.get("value", []):
+                if "folder" not in child:
+                    continue
+                space_uuid = child["name"]
+                meta_resp = self._get_file(self._meta_path(space_uuid))
+                if meta_resp.status_code == 404:
+                    continue
+                meta_resp.raise_for_status()
+                space = parse_space_meta(meta_resp.content)
+                if space.controller == controller:
+                    result.append(space)
+            url = data.get("@odata.nextLink")
         return result
 
     def get_resource(self, space_uuid: str, path: str) -> StoredResource | None:
@@ -160,19 +166,17 @@ class OneDriveStorage:
             return None
         meta_resp.raise_for_status()
 
-        meta = meta_resp.json()
-        return StoredResource(content=data_resp.content, content_type=meta["content_type"])
+        return StoredResource(content=data_resp.content, content_type=parse_resource_meta(meta_resp.content))
 
     def put_resource(self, space_uuid: str, path: str, content: bytes, content_type: str) -> None:
-        # Verify space exists by checking _meta.json
         meta_resp = self._get_file(self._meta_path(space_uuid))
         if meta_resp.status_code == 404:
             raise KeyError(f"Space {space_uuid!r} not found")
         meta_resp.raise_for_status()
 
         self._put_file(self._resource_data_path(space_uuid, path), content).raise_for_status()
-        resource_meta = json.dumps({"content_type": content_type}).encode()
-        self._put_file(self._resource_meta_path(space_uuid, path), resource_meta, "application/json").raise_for_status()
+        res_meta = serialize_resource_meta(content_type)
+        self._put_file(self._resource_meta_path(space_uuid, path), res_meta, "application/json").raise_for_status()
 
     def delete_resource(self, space_uuid: str, path: str) -> bool:
         data_resp = self._delete_item(self._resource_data_path(space_uuid, path))

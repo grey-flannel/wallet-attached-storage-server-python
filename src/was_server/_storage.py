@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -34,6 +36,32 @@ class StorageBackend(Protocol):
     def get_resource(self, space_uuid: str, path: str) -> StoredResource | None: ...
     def put_resource(self, space_uuid: str, path: str, content: bytes, content_type: str) -> None: ...
     def delete_resource(self, space_uuid: str, path: str) -> bool: ...
+
+
+def encode_resource_path(path: str) -> str:
+    """Percent-encode a resource path for use as a flat storage key."""
+    return urllib.parse.quote(path, safe="")
+
+
+def serialize_space_meta(space_id: str, controller: str) -> bytes:
+    """Serialize space metadata to JSON bytes."""
+    return json.dumps({"id": space_id, "controller": controller}).encode()
+
+
+def parse_space_meta(data: bytes) -> StoredSpace:
+    """Deserialize space metadata from JSON bytes."""
+    meta = json.loads(data)
+    return StoredSpace(id=meta["id"], controller=meta["controller"])
+
+
+def serialize_resource_meta(content_type: str) -> bytes:
+    """Serialize resource metadata (content type) to JSON bytes."""
+    return json.dumps({"content_type": content_type}).encode()
+
+
+def parse_resource_meta(data: bytes) -> str:
+    """Deserialize resource metadata, returning the content type string."""
+    return json.loads(data)["content_type"]
 
 
 class MemoryStorage:

@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import json
-import urllib.parse
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload
 
-from was_server._storage import StoredResource, StoredSpace
+from was_server._storage import (
+    StoredResource,
+    StoredSpace,
+    encode_resource_path,
+    parse_resource_meta,
+    parse_space_meta,
+    serialize_resource_meta,
+    serialize_space_meta,
+)
 
 
 class GoogleDriveStorage:
@@ -98,10 +105,6 @@ class GoogleDriveStorage:
         )
         return created["id"]
 
-    @staticmethod
-    def _encode_path(path: str) -> str:
-        return urllib.parse.quote(path, safe="")
-
     # ------------------------------------------------------------------
     # StorageBackend protocol
     # ------------------------------------------------------------------
@@ -113,14 +116,11 @@ class GoogleDriveStorage:
         meta_id = self._find_file(space_folder_id, "_meta.json")
         if meta_id is None:
             return None
-        raw = self._read_file(meta_id)
-        meta = json.loads(raw)
-        return StoredSpace(id=meta["id"], controller=meta["controller"])
+        return parse_space_meta(self._read_file(meta_id))
 
     def put_space(self, space_uuid: str, space_id: str, controller: str) -> None:
         space_folder_id = self._find_or_create_folder(self._spaces_folder_id, space_uuid)
-        meta = json.dumps({"id": space_id, "controller": controller}).encode()
-        self._upload_file(space_folder_id, "_meta.json", meta, "application/json")
+        self._upload_file(space_folder_id, "_meta.json", serialize_space_meta(space_id, controller), "application/json")
 
     def delete_space(self, space_uuid: str) -> bool:
         space_folder_id = self._find_file(self._spaces_folder_id, space_uuid)
@@ -138,17 +138,22 @@ class GoogleDriveStorage:
 
     def list_spaces(self, controller: str) -> list[StoredSpace]:
         q = f"'{self._spaces_folder_id}' in parents and mimeType='{self._FOLDER_MIME}' and trashed=false"
-        resp = self._service.files().list(q=q, fields="files(id,name)").execute()
-        folders = resp.get("files", [])
         result: list[StoredSpace] = []
-        for folder in folders:
-            meta_id = self._find_file(folder["id"], "_meta.json")
-            if meta_id is None:
-                continue
-            raw = self._read_file(meta_id)
-            meta = json.loads(raw)
-            if meta.get("controller") == controller:
-                result.append(StoredSpace(id=meta["id"], controller=meta["controller"]))
+        page_token: str | None = None
+        while True:
+            resp = self._service.files().list(
+                q=q, fields="nextPageToken, files(id,name)", pageToken=page_token,
+            ).execute()
+            for folder in resp.get("files", []):
+                meta_id = self._find_file(folder["id"], "_meta.json")
+                if meta_id is None:
+                    continue
+                space = parse_space_meta(self._read_file(meta_id))
+                if space.controller == controller:
+                    result.append(space)
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
         return result
 
     def get_resource(self, space_uuid: str, path: str) -> StoredResource | None:
@@ -158,24 +163,23 @@ class GoogleDriveStorage:
         res_folder_id = self._find_file(space_folder_id, "resources")
         if res_folder_id is None:
             return None
-        encoded = self._encode_path(path)
+        encoded = encode_resource_path(path)
         data_id = self._find_file(res_folder_id, f"{encoded}.data")
         meta_id = self._find_file(res_folder_id, f"{encoded}.meta")
         if data_id is None or meta_id is None:
             return None
         content = self._read_file(data_id)
-        meta = json.loads(self._read_file(meta_id))
-        return StoredResource(content=content, content_type=meta["content_type"])
+        content_type = parse_resource_meta(self._read_file(meta_id))
+        return StoredResource(content=content, content_type=content_type)
 
     def put_resource(self, space_uuid: str, path: str, content: bytes, content_type: str) -> None:
         space_folder_id = self._find_file(self._spaces_folder_id, space_uuid)
         if space_folder_id is None:
             raise KeyError(f"Space {space_uuid!r} not found")
         res_folder_id = self._find_or_create_folder(space_folder_id, "resources")
-        encoded = self._encode_path(path)
+        encoded = encode_resource_path(path)
         self._upload_file(res_folder_id, f"{encoded}.data", content, content_type)
-        meta_bytes = json.dumps({"content_type": content_type}).encode()
-        self._upload_file(res_folder_id, f"{encoded}.meta", meta_bytes, "application/json")
+        self._upload_file(res_folder_id, f"{encoded}.meta", serialize_resource_meta(content_type), "application/json")
 
     def delete_resource(self, space_uuid: str, path: str) -> bool:
         space_folder_id = self._find_file(self._spaces_folder_id, space_uuid)
@@ -184,7 +188,7 @@ class GoogleDriveStorage:
         res_folder_id = self._find_file(space_folder_id, "resources")
         if res_folder_id is None:
             return False
-        encoded = self._encode_path(path)
+        encoded = encode_resource_path(path)
         data_id = self._find_file(res_folder_id, f"{encoded}.data")
         if data_id is None:
             return False

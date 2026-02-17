@@ -30,7 +30,7 @@ class _MockDriveFiles:
 
     # -- files().list() -----------------------------------------------------
 
-    def list(self, *, q: str = "", fields: str = "") -> MagicMock:  # noqa: A003
+    def list(self, *, q: str = "", fields: str = "", pageToken: str | None = None) -> MagicMock:  # noqa: A003, N803
         result_files: list[dict] = []
         for f in self._files.values():
             if not self._matches_query(f, q):
@@ -39,7 +39,7 @@ class _MockDriveFiles:
             if "name" in fields or fields == "":
                 entry["name"] = f["name"]
             result_files.append(entry)
-        resp = {"files": result_files}
+        resp: dict = {"files": result_files}
         req = MagicMock()
         req.execute.return_value = resp
         return req
