@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --locked --dev
+        run: uv sync --locked --dev --extra all-backends
 
       - name: Ruff
         run: uv run ruff check
